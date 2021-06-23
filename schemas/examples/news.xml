@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<response
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:noNamespaceSchemaLocation="../response.xsd">
+    <name>Новости</name>
+    <text>✔ Официальные источники:</text>
+    <keyboard>
+        <key>
+            <text>Сегодня в УдГУ</text>
+            <url>https://udsu.ru/news</url>
+        </key>
+        <key>
+            <text>Новости для абитуриентов</text>
+            <url>https://udsu.ru/admissions/2020</url>
+        </key>
+        <key>
+            <text>Telegram канал приемной комиссии</text>
+            <url>http://t.me/prikomudgu</url>
+        </key>
+    </keyboard>
+</response>

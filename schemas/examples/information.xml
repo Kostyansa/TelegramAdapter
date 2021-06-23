@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<response
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:noNamespaceSchemaLocation="../response.xsd">
+    <name>Информация</name>
+    <keyboard row_width=2>
+        <key>
+            <text>⏰ Расписание звонков</text>
+            <callback_data>⏰ Расписание звонков</callback_data>
+        </key>
+        <key>
+            <text>🎓 Коротко об учебе</text>
+            <callback_data>🎓 Коротко об учебе</callback_data>
+        </key>
+    </keyboard>
+</response>
