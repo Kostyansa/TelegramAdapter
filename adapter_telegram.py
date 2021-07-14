@@ -5,17 +5,14 @@ import os
 import logging
 from functools import lru_cache
 
-from lxml import etree # pylint: disable=import-error
-from lxml import objectify # pylint: disable=import-error
-
 from telegram.error import NetworkError, Unauthorized, TelegramError # pylint: disable=import-error
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Update # pylint: disable=import-error
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, Filters, CallbackContext # pylint: disable=import-error
 
 import pika # pylint: disable=import-error
 
-import mapper
-from entities.message import Message
+import entities.message_pb2 as messages
+import entities.event_pb2 as events
 
 source = "Telegram"
 
@@ -60,32 +57,32 @@ class AdapterTelegram:
 
 
     def prepare_inline_keyboard(self, keyboard):
-        if 'row_width' in keyboard.attrib:
-            row_width = int(keyboard.attrib['row_width'])
+        if keyboard.hasRowWidth():
+            row_width = int(keyboard.row_width)
         else:
             row_width = 1
         result = []
-        keys = keyboard.findall('key')
+        keys = keyboard.keys
         for i in range(len(keys)//row_width + 1):
             row_keys = keys[i*row_width:(i+1)*row_width]
             row = []
             for key in row_keys:
-                if key.find('url') is not None:
-                    row.append(InlineKeyboardButton(key.find('text').text, url = key.find('url').text))
-                elif key.find('callback_data') is not None:
-                    row.append(InlineKeyboardButton(key.find('text').text, callback_data = key.find('callback_data').text))
+                if key.hasURL():
+                    row.append(InlineKeyboardButton(key.text, url = key.url))
+                elif key.hasCallback_data():
+                    row.append(InlineKeyboardButton(key.text, callback_data = key.callback_data))
                 else:
-                    row.append(InlineKeyboardButton(key.find('text').text, callback_data = key.find('text').text))
+                    row.append(InlineKeyboardButton(key.text, callback_data = key.text))
             result.append(row)
         return result
 
     def prepare_reply_keyboard(self, keyboard):
-        if 'row_width' in keyboard.attrib:
-            row_width = int(keyboard.attrib['row_width'])
+        if keyboard.hasRowWidth():
+            row_width = int(keyboard.row_width)
         else:
             row_width = 1
         result = []
-        keys = keyboard.findall('key')
+        keys = keyboard.keys
         for i in range(len(keys)//row_width + 1):
             row_keys = keys[i*row_width:(i+1)*row_width]
             row = []
@@ -95,26 +92,25 @@ class AdapterTelegram:
         return result
 
     def send_response(self, chat_id, response):
-        if response.find('keyboard') is not None:
-            keyboard = response.find('keyboard')
-            if 'type' in keyboard.attrib:
-                if keyboard.attrib['type'] == 'InlineKeyboard':
+        if response.hasKeyboard():
+            keyboard = response.keyboard
+            if keyboard.type == 'InlineKeyboard':
                     reply_markup = InlineKeyboardMarkup(self.prepare_inline_keyboard(keyboard))
-                elif keyboard.attrib['type'] == 'ReplyKeyboard':
+            elif keyboard.attrib.type == 'ReplyKeyboard':
                     reply_markup = ReplyKeyboardMarkup(self.prepare_reply_keyboard(keyboard))
             else:
                 reply_markup = InlineKeyboardMarkup(self.prepare_inline_keyboard(keyboard))
 
-            if response.find('text') is not None:
-                self.bot.send_message(chat_id, response.find('text').text, reply_markup=reply_markup)
+            if response.hasText():
+                self.bot.send_message(chat_id, response.text, reply_markup=reply_markup)
             else:
-                self.bot.send_message(chat_id, response.find('name').text, reply_markup=reply_markup)
+                self.bot.send_message(chat_id, response.name, reply_markup=reply_markup)
         else:
-            self.bot.send_message(chat_id, response.find('text').text)
-        if response.find('picture') is not None:
-            self.bot.send_photo(chat_id, response.find('picture/url').text)
-        if response.find('location') is not None:
-            self.bot.send_location(chat_id, float(response.find('location/latitude').text), float(response.find('location/longitude').text))
+            self.bot.send_message(chat_id, response.text)
+        for picture in response.pictures:
+            self.bot.send_photo(chat_id, picture.URL)
+        if response.hasLocation():
+            self.bot.send_location(chat_id, float(response.location.latitude), float(response.find.location.longitude))
 
 
 
@@ -135,7 +131,14 @@ class AdapterTelegram:
     def call(self, message, chat_id):
         self.response = None
         self.corr_id = str(uuid.uuid4())
-        message_entity = Message(source, str(chat_id), message)
+        message_entity = messages.Message()
+        message_entity.source = source
+        message_entity.userId = str(chat_id)
+        message_entity.text = message
+        event = events.Event()
+        event.UUID = uuid.uuid4()
+        event.time.GetCurrentTime()
+        event.payload.Pack(message_entity)
         self.channel.basic_publish(
             exchange='messages',
             routing_key='message',
@@ -143,7 +146,7 @@ class AdapterTelegram:
                 reply_to=self.callback_queue,
                 correlation_id=self.corr_id,
             ),
-            body=mapper.message_to_xml(message_entity)
+            body=event.SerializeToString()
             )
         logging.info(f'Sent message event to rabbitMQ, UUID:{self.corr_id}')
         while self.response is None:
@@ -152,15 +155,16 @@ class AdapterTelegram:
 
     def on_response(self, ch, method, props, body):
         if self.corr_id == props.correlation_id:
-            self.response = etree.fromstring(body)
+            event = events.Event()
+            event.ParseFromString(body)
+            response = messages.Response()
+            event.payload.Unpack(response)
+            self.response = response
 
     def telegram_start(self):
         self.updater.start_polling()
 
     def start(self) -> None:
-        #telegram_thread = threading.Thread(target=self.telegram_start, args=())
-        #telegram_thread.daemon = True
-        #telegram_thread.start()
         self.telegram_start()
         while (True):
             time.sleep(5)
