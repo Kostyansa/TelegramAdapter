@@ -3,6 +3,7 @@ import uuid
 import threading
 import os
 import logging
+import sys
 from functools import lru_cache
 
 from telegram.error import NetworkError, Unauthorized, TelegramError # pylint: disable=import-error
