@@ -18,13 +18,13 @@ source = "Telegram"
 
 class AdapterTelegram:
     def __init__(self, hostname, APIKey, username, password):
-        self.connection = pika.BlockingConnection(
-                    pika.ConnectionParameters(
+
+        self.connection_parameters = pika.ConnectionParameters(
                         heartbeat=30,
                         blocked_connection_timeout=300, 
                         host=hostname
                         )
-                    )
+        self.connection = pika.BlockingConnection(self.connection_parameters)
         self.channel = self.connection.channel()
         result = self.channel.queue_declare(queue='Telegram', exclusive=True)
         self.callback_queue = result.method.queue
@@ -56,6 +56,20 @@ class AdapterTelegram:
             if update.message is not None:
                 if update.message.chat is not None:
                     self.bot.send_message(update.message.chat.id, "Во время обработки вашего сообщения произошла ошибка, пожалуйста, попробуйте позже.")
+        if (isinstance(context.error, pika.exceptions.ChannelWrongStateError)) or (isinstance(context.error, pika.exceptions.StreamLostError)):
+            logging.error(f'Channel is down')
+            try:
+                self.connection = pika.BlockingConnection(self.connection_parameters)
+                self.channel = self.connection.channel()
+                result = self.channel.queue_declare(queue='Telegram', exclusive=True)
+                self.callback_queue = result.method.queue
+                self.channel.basic_consume(
+                    queue=self.callback_queue,
+                    on_message_callback=self.on_response,
+                    auto_ack=True)
+            except Exception as exc:
+                logging.error(exc)
+                sys.exit(404)
 
 
     def prepare_inline_keyboard(self, keyboard):
