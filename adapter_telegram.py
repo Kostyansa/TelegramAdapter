@@ -49,8 +49,6 @@ class AdapterTelegram:
         logging.info(f'Send response to {update.message.chat.id}')
 
     def error_handler(self, update, context) -> None:
-        #Добавить разделение по типам ошибки
-        #При некоторых ошибках падать и открывать connection заново
         logging.warning(f'Error while sendind message', exc_info=context.error)
         if update is not None:
             if update.message is not None:
